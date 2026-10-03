@@ -1,4 +1,5 @@
 name: Deploy Ar-Rafeeq Islamic Library Preview
+# Preview trigger: source is always read from feat/islamic-library.
 
 on:
   workflow_dispatch:
