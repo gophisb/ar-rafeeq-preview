@@ -1,0 +1,72 @@
+name: Deploy Ar-Rafeeq Islamic Library Preview
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: preview-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout preview repository
+        uses: actions/checkout@v4
+
+      - name: Checkout source branch
+        uses: actions/checkout@v4
+        with:
+          repository: gophisb/ar-rafeeq4
+          ref: feat/islamic-library
+          path: site
+          fetch-depth: 1
+
+      - name: Prepare isolated preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf public
+          mkdir -p public
+          cp -a site/. public/
+          rm -rf public/.git public/.github
+          SHA="$(git -C site rev-parse HEAD)"
+          SHORT_SHA="$(git -C site rev-parse --short HEAD)"
+
+          python - <<PY
+          from pathlib import Path
+          p = Path("public/sw.js")
+          s = p.read_text(encoding="utf-8")
+          s = s.replace("const CACHE_NAME = 'rafeeq4-core-v25';", "const CACHE_NAME = 'rafeeq4-preview-library-v1-" + "${SHORT_SHA}" + "';")
+          s = s.replace(".filter(key => key.startsWith('rafeeq4-') && key !== CACHE_NAME)", ".filter(key => key.startsWith('rafeeq4-preview-library-') && key !== CACHE_NAME)")
+          p.write_text(s, encoding="utf-8")
+          PY
+
+          cat > public/preview-build.json <<EOF
+          {
+            "sourceRepository": "gophisb/ar-rafeeq4",
+            "sourceBranch": "feat/islamic-library",
+            "sourceCommit": "${SHA}",
+            "sourceCommitShort": "${SHORT_SHA}",
+            "previewRepository": "gophisb/ar-rafeeq-preview"
+          }
+          EOF
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
